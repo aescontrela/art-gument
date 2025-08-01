@@ -2,11 +2,13 @@ import { NotFoundError } from '../errors/api-error';
 import MessageRepository from '../repositories/message-repository';
 import ThreadRepository from '../repositories/thread-repository';
 import { Character } from '../schema';
+import AnthropicService from './anthropic-service';
 
 export default class ChatService {
   constructor(
     private readonly messageRepository = new MessageRepository(),
-    private readonly threadRepository = new ThreadRepository()
+    private readonly threadRepository = new ThreadRepository(),
+    private readonly anthropicService = new AnthropicService()
   ) {}
 
   private async validateAndGetThread(threadId: number) {
@@ -45,10 +47,49 @@ export default class ChatService {
     threadId: number;
     character: Character;
   }) {
-    console.log('NOT IMPLEMENTED YET', input);
+    const thread = await this.validateAndGetThread(input.threadId);
+
+    const results = await this.anthropicService.getCharacterResponse(
+      thread.messages.map(({ author, message }) => ({
+        role: author !== 'user' ? 'assistant' : 'user',
+        content: message,
+      })),
+      input.character
+    );
+
+    for (const result of results) {
+      await this.messageRepository.create({
+        threadId: input.threadId,
+        author: result.character,
+        message: result.response,
+      });
+    }
+
+    const updatedThread = await this.validateAndGetThread(input.threadId);
+
+    return updatedThread.messages;
   }
 
   async generateNextCharacterMessage(input: { threadId: number }) {
-    console.log('NOT IMPLEMENTED YET', input);
+    const thread = await this.validateAndGetThread(input.threadId);
+
+    const results = await this.anthropicService.getNextCharacterResponse(
+      thread.messages.map(({ author, message }) => ({
+        role: author !== 'user' ? 'assistant' : 'user',
+        content: message,
+      }))
+    );
+
+    for (const result of results) {
+      await this.messageRepository.create({
+        threadId: input.threadId,
+        author: result.character,
+        message: result.response,
+      });
+    }
+
+    const updatedThread = await this.validateAndGetThread(input.threadId);
+
+    return updatedThread.messages;
   }
 }

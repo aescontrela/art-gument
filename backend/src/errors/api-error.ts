@@ -17,8 +17,8 @@ export class APIError extends Error {
 }
 
 export class ValidationError extends APIError {
-  constructor(issues: string[]) {
-    super(`Validation failed: ${issues.join(', ')}`, 400);
+  constructor(issues: string[], statusCode: HttpStatusCode = 400) {
+    super(`Validation failed: ${issues.join(', ')}`, statusCode);
   }
 }
 
@@ -43,8 +43,12 @@ export class ForbiddenError extends APIError {
 export class InternalServerError extends APIError {
   public readonly originalError?: string;
 
-  constructor(message = 'Internal server error', originalError?: string) {
-    super(message, 500);
+  constructor(
+    message = 'Internal server error',
+    originalError?: string,
+    statusCode: HttpStatusCode = 500
+  ) {
+    super(message, statusCode);
     this.originalError = originalError;
   }
 }

@@ -1,3 +1,23 @@
+# Art-gument API
+
+An AI-powered chat application backend that enables conversations with iconic 1980s NYC art scene figures. Users can engage in authentic conversations with Jean-Michel Basquiat, Keith Haring, Lou Reed, and Richard Hell, powered by Anthropic's Claude AI.
+
+## Features
+
+- PostgreSQL Database
+- RESTful API Design
+- Zod Validation
+- Thread-based Chat System
+- AI Character Conversations
+- Anthropic Claude Integration
+
+## Prerequisites
+
+- Node.js 18+
+- PostgreSQL 14+
+- Yarn package manager
+- Anthropic API key
+
 ## Quick Start
 
 1. **Clone and install dependencies**
