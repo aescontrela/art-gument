@@ -1,18 +1,32 @@
 import cors from 'cors';
 import 'dotenv/config';
 import express from 'express';
+import errorMiddleware from './middleware/error-middleware';
+import DatabaseService from './services/database-service';
 
-const app = express();
-const port = process.env.PORT;
+(async () => {
+  try {
+    const db = new DatabaseService();
 
-if (!port) {
-  throw new Error('PORT is not set');
-}
+    await db.setup();
+    const app = express();
+    const port = process.env.PORT;
 
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+    if (!port) {
+      throw new Error('PORT is not set');
+    }
+    app.use(cors());
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
 
-app.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`);
-});
+    // Routes will go here
+    app.use(errorMiddleware);
+
+    app.listen(port, () => {
+      console.log(`Server is running at http://localhost:${port}`);
+    });
+  } catch (e) {
+    console.error('Failed to start server:', e);
+    process.exit(1);
+  }
+})();
