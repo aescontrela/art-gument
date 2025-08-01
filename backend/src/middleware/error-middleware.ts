@@ -23,10 +23,8 @@ export default (
   res.status(statusCode).json({
     error: {
       name: errorName,
-      message: error.message || 'Something went wrong',
       statusCode,
+      message: statusCode < 500 ? error.message : undefined,
     },
   });
-
-  return;
 };

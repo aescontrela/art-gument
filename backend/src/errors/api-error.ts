@@ -16,6 +16,12 @@ export class APIError extends Error {
   }
 }
 
+export class ValidationError extends APIError {
+  constructor(issues: string[]) {
+    super(`Validation failed: ${issues.join(', ')}`, 400);
+  }
+}
+
 export class NotFoundError extends APIError {
   constructor(resource = 'Resource') {
     super(`${resource} not found`, 404);

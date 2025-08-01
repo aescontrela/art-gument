@@ -2,6 +2,7 @@ import cors from 'cors';
 import 'dotenv/config';
 import express from 'express';
 import errorMiddleware from './middleware/error-middleware';
+import router from './routes';
 import DatabaseService from './services/database-service';
 
 (async () => {
@@ -19,7 +20,8 @@ import DatabaseService from './services/database-service';
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
 
-    // Routes will go here
+    app.use('/api', router);
+
     app.use(errorMiddleware);
 
     app.listen(port, () => {
