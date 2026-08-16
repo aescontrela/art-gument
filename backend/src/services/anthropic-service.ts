@@ -19,8 +19,8 @@ type CharacterResponse = z.infer<typeof CharacterResponseSchema>;
 
 export default class AnthropicService {
   private readonly anthropic: Anthropic;
-  private readonly model = 'claude-3-5-sonnet-20240620';
-  private readonly maxTokens = 1000;
+  private readonly model = 'claude-opus-5';
+  private readonly maxTokens = 8000;
 
   constructor() {
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -45,8 +45,8 @@ export default class AnthropicService {
       conversationHistory,
       systemPrompt: prompts.SINGLE_CHARACTER,
       newMessage: {
-        role: 'assistant',
-        content: `${character} responds`,
+        role: 'user',
+        content: `${character} speaks next. Respond as ${character}.`,
       },
     });
   }
@@ -58,8 +58,9 @@ export default class AnthropicService {
       conversationHistory,
       systemPrompt: prompts.NEXT_CHARACTER,
       newMessage: {
-        role: 'assistant',
-        content: `IMPORTANT: Select a DIFFERENT character than the last speaker.`,
+        role: 'user',
+        content:
+          'Choose the next speaker — a different character than whoever spoke last — and respond as them.',
       },
     });
 

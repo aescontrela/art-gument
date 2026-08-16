@@ -4,27 +4,26 @@ import { Character } from '../../schema';
 const characterTool: Tool = {
   name: 'get_character_response',
   description:
-    'Generate a character response in 1982 NYC art scene conversation. MUST follow character rotation rules and avoid repetition.',
+    'Return the next line of dialogue in the 1982 NYC art scene conversation.',
   input_schema: {
     type: 'object',
     properties: {
       character: {
         type: 'string',
         enum: Object.values(Character),
-        description:
-          'Character name - MUST be different from the last speaker (mandatory rotation)',
+        description: 'The character speaking this line',
       },
       response: {
         type: 'string',
         description:
-          'Character response (MAXIMUM 25 words for natural party conversation)',
+          "The character's line — under 25 words of natural party conversation",
         minLength: 5,
         maxLength: 200,
       },
       reasoning: {
         type: 'string',
         description:
-          'Brief explanation: why this character (not last speaker) and why this response is unique',
+          'Why this character speaks next and what this line adds to the conversation',
         maxLength: 100,
       },
     },
