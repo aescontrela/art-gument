@@ -1,6 +1,8 @@
 import cors from 'cors';
 import 'dotenv/config';
 import express from 'express';
+import swaggerUi from 'swagger-ui-express';
+import openapiDocument from './docs/openapi';
 import errorMiddleware from './middleware/error-middleware';
 import router from './routes';
 import DatabaseService from './services/database-service';
@@ -20,6 +22,7 @@ import DatabaseService from './services/database-service';
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
 
+    app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapiDocument));
     app.use('/api', router);
 
     app.use(errorMiddleware);

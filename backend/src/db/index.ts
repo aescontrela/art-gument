@@ -20,6 +20,10 @@ export default class DB {
     });
   }
 
+  async close() {
+    await DB.pool.end();
+  }
+
   async query(query: SQLStatement): Promise<QueryResult> {
     let client;
     try {

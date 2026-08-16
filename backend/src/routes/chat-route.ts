@@ -12,9 +12,17 @@ const router = Router();
 const controller = new ChatController();
 
 /**
- * Create a new conversation thread
- * @route POST /api/chat/thread
- * @returns {number} Thread ID
+ * @openapi
+ * /api/chat/thread:
+ *   post:
+ *     summary: Create a new conversation thread
+ *     responses:
+ *       200:
+ *         description: ID of the created thread
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: integer
  */
 router.post(
   '/thread',
@@ -23,10 +31,32 @@ router.post(
 );
 
 /**
- * Get a conversation thread
- * @route GET /api/chat/thread/:id
- * @param {number} id - Thread ID
- * @returns {Object} Thread with ID and messages array
+ * @openapi
+ * /api/chat/thread/{id}:
+ *   get:
+ *     summary: Get a thread's messages and history
+ *     parameters:
+ *       - $ref: '#/components/parameters/ThreadId'
+ *     responses:
+ *       200:
+ *         description: The thread with its full message history
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 messages:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Message'
+ *       404:
+ *         description: Thread not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get(
   '/thread/:id',
@@ -35,14 +65,44 @@ router.get(
 );
 
 /**
- * Send message to thread - supports user input, character responses, or AI moderation
- * @route POST /api/chat/thread/:id/messages
- * @param {number} id - Thread ID
- * @body {Object} Message data with type: 'user'|'character'|'moderator'
- * @example User: { "type": "user", "message": "Hello" }
- * @example Character: { "type": "character", "character": "LOU_REED" }
- * @example Moderator: { "type": "moderator" }
- * @returns {Array} Updated message history
+ * @openapi
+ * /api/chat/thread/{id}/messages:
+ *   post:
+ *     summary: Send a message to the thread
+ *     description: >
+ *       A `user` message is stored without generating a reply. Send
+ *       `{"type": "moderator"}` to let the AI moderator pick who speaks next,
+ *       or `{"type": "character", "character": "..."}` to make a specific
+ *       character respond. Each call adds one line to the conversation.
+ *     parameters:
+ *       - $ref: '#/components/parameters/ThreadId'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/PostThreadMessageBody'
+ *     responses:
+ *       200:
+ *         description: The updated message history
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Message'
+ *       404:
+ *         description: Thread not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       422:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   '/thread/:id/messages',
