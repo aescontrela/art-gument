@@ -1,6 +1,18 @@
 # Art-gument API
 
-An AI-powered chat application backend that enables conversations with iconic 1980s NYC art scene figures. Users can engage in authentic conversations with Jean-Michel Basquiat, Keith Haring, Lou Reed, and Richard Hell, powered by Anthropic's Claude AI.
+This project started as an exploration of prompt design and of getting reliable, structured output from an LLM. It's an AI-powered API that enables conversations with iconic 1980s NYC art scene figures: Jean-Michel Basquiat, Keith Haring, Lou Reed, and Richard Hell.
+
+The architecture is deliberately simple. A single system prompt acts as the moderator of a four-way conversation. The problem I wanted to explore is what it takes to generate a believable human conversation around a very specific topic, with distinct personalities and real conversational dynamics: interruptions, rivalries, running tensions. Everything is anchored to February 1982, so the characters reference Reagan, the launch of MTV, and CBGBs, never anything after.
+
+### What I learned
+
+- **Structured output trades away conversational naturalness.** Forcing every reply through a schema-constrained tool call made the output reliably parseable but it also means the dialogue is generated one clean turn at a time. Real arguments have interruptions, overlapping voices, and characters who dominate a heated stretch. A one-speaker-one-line schema can't express any of that.
+
+- **The model has no memory or world state beyond the transcript.** Each call only knows what's in the prompt: the character sheets and the message history. Characters can't remember earlier threads, develop opinions over time, or know anything about the user. And there's no truncation or summarization; the full history is replayed on every call, so a long enough conversation would eventually exceed the context window and the request would simply fail. The transcript doesn't even carry speaker labels: every character's line reaches the model as a bare assistant message, so "who spoke last" rides entirely on the model recognizing each character's voice.
+
+- **Personality comes from specifics, not adjectives.** Each character is a structured prompt sheet: who they are in February 1982, how they enter a conversation, sample speech patterns ("Back when I was tagging trains..."), the cultural references they'd actually reach for, and, most importantly, how they relate to each of the other three. Giving Basquiat verbatim phrasings, named places (the Mudd Club, SAMO tags), and a defined tension with the gallery establishment is what made his voice recognizable. The relational part turned out to be the load-bearing piece. The rivalries and alliances written into each sheet are what generate the argument, since the moderator prompt can only surface conflicts that the character sheets already contain: it picks who speaks, but the rivalries themselves have to be written into the characters.
+
+- **Latency compounds too.** A "conversation round" is a full round-trip to the model per line, so multi-line exchanges are slow to assemble. Batching several lines into one generation would trade some control for speed.
 
 ## Features
 
@@ -87,56 +99,9 @@ Copy `env-sample` to `.env` and fill in the necessary values, including database
 
 ## API Documentation
 
-### Chat API
+The OpenAPI spec is generated from the same Zod schemas that validate incoming requests. The API docs are served at [http://localhost:3000/api/docs](http://localhost:3000/api/docs).
 
-- `POST /api/threads` - Create new conversation thread
-- `GET /api/threads/:id` - Get thread messages and history
-- `POST /api/threads/:id/messages` - Send message to thread
-- `POST /api/threads/:id/conversation-rounds` - Generate character responses
-
-### Character System
-
-Available characters:
-
-- `BASQUIAT` - Jean-Michel Basquiat
-- `KEITH_HARING` - Keith Haring
-- `LOU_REED` - Lou Reed
-- `RICHARD_HELL` - Richard Hell
-
-### Example Usage
-
-**Create a new conversation thread:**
-
-```bash
-curl -X POST http://localhost:3000/api/threads \
-  -H "Content-Type: application/json"
-```
-
-**Send a user message:**
-
-```bash
-curl -X POST http://localhost:3000/api/threads/1/messages \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "user",
-    "message": "Tell me about your experience in the NYC art scene"
-  }'
-```
-
-**Generate character responses:**
-
-```bash
-curl -X POST http://localhost:3000/api/threads/1/conversation-rounds \
-  -H "Content-Type: application/json"
-```
-
-**Get thread history:**
-
-```bash
-curl http://localhost:3000/api/threads/1
-```
-
-## Development
+The interaction model is designed around a potential frontend chat, where the user can talk to a single character or to the whole group. Posting a user message only stores your question. Nothing is generated until you explicitly ask for a reply with a moderator message (the AI picks who speaks next) or a character message (a specific character answers). Each call adds one line to the conversation, so repeated moderator calls make the characters argue among themselves.
 
 ### Available Commands
 
