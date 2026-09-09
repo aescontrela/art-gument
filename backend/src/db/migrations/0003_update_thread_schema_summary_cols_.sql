@@ -1,0 +1,3 @@
+ALTER TABLE thread 
+    ADD COLUMN IF NOT EXISTS summary TEXT,
+    ADD COLUMN IF NOT EXISTS summarized_until TIMESTAMPTZ;

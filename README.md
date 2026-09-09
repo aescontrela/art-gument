@@ -8,7 +8,7 @@ The architecture is deliberately simple. A single system prompt acts as the mode
 
 - **Structured output trades away conversational naturalness.** Forcing every reply through a schema-constrained tool call made the output reliably parseable but it also means the dialogue is generated one clean turn at a time. Real arguments have interruptions, overlapping voices, and characters who dominate a heated stretch. A one-speaker-one-line schema can't express any of that.
 
-- **The model has no memory or world state beyond the transcript.** Each call only knows what's in the prompt: the character sheets and the message history. Characters can't remember earlier threads, develop opinions over time, or know anything about the user. And there's no truncation or summarization; the full history is replayed on every call, so a long enough conversation would eventually exceed the context window and the request would simply fail. The transcript doesn't even carry speaker labels: every character's line reaches the model as a bare assistant message, so "who spoke last" rides entirely on the model recognizing each character's voice.
+- **Memory is compaction: a rolling summary plus a verbatim window.** Originally the full history was replayed on every call, so a long enough conversation would exceed the context window and the request would simply fail. Now each generation call sees the last 10 messages verbatim plus a rolling summary of everything older, injected into the system prompt. When enough messages have aged out of the window, they're folded into the summary with one extra (cheaper) model call before the reply is generated, and a watermark column records how far the summary reaches so each message is summarized exactly once. The summarizer is told what to preserve (facts the user revealed, positions taken, how relationships moved) because whatever it drops is forgotten forever: the summary is lossy with no recovery. That trade is deliberate. 
 
 - **Personality comes from specifics, not adjectives.** Each character is a structured prompt sheet: who they are in February 1982, how they enter a conversation, sample speech patterns ("Back when I was tagging trains..."), the cultural references they'd actually reach for, and, most importantly, how they relate to each of the other three. Giving Basquiat verbatim phrasings, named places (the Mudd Club, SAMO tags), and a defined tension with the gallery establishment is what made his voice recognizable. The relational part turned out to be the load-bearing piece. The rivalries and alliances written into each sheet are what generate the argument, since the moderator prompt can only surface conflicts that the character sheets already contain: it picks who speaks, but the rivalries themselves have to be written into the characters.
 
@@ -21,6 +21,7 @@ The architecture is deliberately simple. A single system prompt acts as the mode
 - Zod Validation
 - Thread-based Chat System
 - AI Character Conversations
+- Rolling-Summary Conversation Memory
 - Anthropic Claude Integration
 
 ## Prerequisites
@@ -107,7 +108,7 @@ The interaction model is designed around a potential frontend chat, where the us
 
 - `yarn dev` - Start development server with hot reload
 - `yarn build` - Build production bundle
-- `yarn test` - Run tests (not implemented yet)
+- `yarn test` - Run tests
 - `yarn lint` - Run ESLint
 - `yarn migrate` - Run database migrations
 - `yarn seed` - Seed database with initial data

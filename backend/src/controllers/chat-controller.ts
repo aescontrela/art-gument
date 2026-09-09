@@ -17,7 +17,7 @@ export default class ChatController {
   ): Promise<void> {
     try {
       const threadId = Number(req.params.id);
-      const result = await this.chatService.getThread(threadId);
+      const result = await this.chatService.getThreadById(threadId);
       res.status(200).json(result);
     } catch (error) {
       next(error);

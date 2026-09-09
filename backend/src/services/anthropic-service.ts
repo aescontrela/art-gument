@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prompts from '../agent/prompts';
 import characterResponseTool from '../agent/tools/character-response-tool';
 import { InternalServerError, ValidationError } from '../errors/api-error';
+import { Message } from '../repositories/message-repository';
 import { Character } from '../schema';
 
 type ChatMessage = {
@@ -37,13 +38,25 @@ export default class AnthropicService {
     });
   }
 
+  private compactConversation(
+    systemPrompt: string,
+    summary?: string | null
+  ): string {
+    if (!summary) {
+      return systemPrompt;
+    }
+
+    return `${systemPrompt}\n\n<conversation_summary>\n${summary}\n</conversation_summary>`;
+  }
+
   async getCharacterResponse(
     conversationHistory: ChatMessage[] = [],
-    character: Character
+    character: Character,
+    summary?: string | null
   ): Promise<CharacterResponse[]> {
     return await this._generateCharacterResponse({
       conversationHistory,
-      systemPrompt: prompts.SINGLE_CHARACTER,
+      systemPrompt: this.compactConversation(prompts.SINGLE_CHARACTER, summary),
       newMessage: {
         role: 'user',
         content: `${character} speaks next. Respond as ${character}.`,
@@ -52,11 +65,12 @@ export default class AnthropicService {
   }
 
   async getNextCharacterResponse(
-    conversationHistory: ChatMessage[] = []
+    conversationHistory: ChatMessage[] = [],
+    summary?: string | null
   ): Promise<CharacterResponse[]> {
     const response = await this._generateCharacterResponse({
       conversationHistory,
-      systemPrompt: prompts.NEXT_CHARACTER,
+      systemPrompt: this.compactConversation(prompts.NEXT_CHARACTER, summary),
       newMessage: {
         role: 'user',
         content:
@@ -65,6 +79,42 @@ export default class AnthropicService {
     });
 
     return response;
+  }
+
+  async summarizeConversation({
+    existingSummary,
+    messages,
+  }: {
+    existingSummary: string | null;
+    messages: Pick<Message, 'author' | 'message'>[];
+  }): Promise<string> {
+    const transcript = messages
+      .map(({ author, message }) => `${author}: ${message}`)
+      .join('\n');
+
+    const results = await this.anthropic.messages.create({
+      model: 'claude-sonnet-5',
+      system: prompts.SUMMARIZE,
+      max_tokens: 1024,
+      messages: [
+        {
+          role: 'user',
+          content: `Existing summary:\n${existingSummary ?? 'None yet.'}\n\nNew messages:\n${transcript}`,
+        },
+      ],
+    });
+
+    const text = results.content.find(block => block.type === 'text');
+
+    if (!text) {
+      throw new InternalServerError(
+        'Service temporarily unavailable',
+        'Anthropic API returned no summary text',
+        503
+      );
+    }
+
+    return text.text.trim();
   }
 
   private async _generateCharacterResponse({

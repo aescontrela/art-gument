@@ -8,6 +8,7 @@ export type Message = {
   author: Author;
   message: string;
   threadId: number;
+  createdAt: Date;
 };
 
 export default class MessageRepository {
