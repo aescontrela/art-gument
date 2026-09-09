@@ -65,6 +65,32 @@ Copy `env-sample` to `.env` and fill in the necessary values, including database
    yarn seed
    ```
 
+## Tests
+
+1. **Create the database and user** (replace with your actual values):
+
+   ```bash
+   # Connect to PostgreSQL as superuser
+   psql -U postgres
+
+   # Create database and user
+   DROP DATABASE IF EXISTS artgument_db;
+   CREATE ROLE artgument_test_user WITH LOGIN PASSWORD 'your_secure_password';
+   CREATE DATABASE artgument_test_db OWNER artgument_test_user;
+   GRANT ALL PRIVILEGES ON DATABASE artgument_test_db TO artgument_test_user;
+   ```
+
+2. **Grant schema privileges**:
+
+   ```bash
+   # Connect to your database
+   \c artgument_test_user
+
+   GRANT USAGE ON SCHEMA public TO artgument_test_user;
+   GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO artgument_test_user;
+   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO artgument_user;
+   ```
+
 ## API Documentation
 
 ### Chat API

@@ -26,7 +26,7 @@ export default class ThreadRepository {
     return rows[0].id;
   }
 
-  async update({
+  async updateSummary({
     id,
     summary,
     summarizedUntil,
@@ -34,18 +34,21 @@ export default class ThreadRepository {
     id: number;
     summary: string;
     summarizedUntil: Date;
-  }): Promise<void> {
-    const { rowCount } = await this.db.query(
+  }): Promise<string> {
+    const { rows } = await this.db.query(
       SQL`
         UPDATE thread SET
           summary = ${summary},
           summarized_until = ${summarizedUntil}
-        WHERE id = ${id};`
+        WHERE id = ${id}
+        RETURNING id;`
     );
 
-    if (rowCount === 0) {
+    if (rows.length === 0) {
       throw new NotFoundError(`Thread could not be updated.`);
     }
+
+    return rows[0].id;
   }
 
   async getById(threadId: number, limit?: number): Promise<Thread> {

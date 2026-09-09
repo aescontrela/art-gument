@@ -28,7 +28,7 @@ function build({
     getThreadOverflow: jest
       .fn()
       .mockResolvedValue({ id: 1, summary: storedSummary, messages: overflow }),
-    update: jest.fn().mockResolvedValue(undefined),
+    updateSummary: jest.fn().mockResolvedValue(undefined),
     create: jest.fn(),
   };
   const messageRepository = { create: jest.fn().mockResolvedValue('msg-id') };
@@ -65,7 +65,7 @@ describe('summarization trigger', () => {
       existingSummary: 'old summary',
       messages: overflow,
     });
-    expect(threadRepository.update).toHaveBeenCalledWith({
+    expect(threadRepository.updateSummary).toHaveBeenCalledWith({
       id: 1,
       summary: 'the new summary',
       summarizedUntil: overflow[overflow.length - 1].createdAt,
@@ -79,7 +79,8 @@ describe('summarization trigger', () => {
 
     await service.generateNextCharacterMessage({ threadId: 1 });
 
-    const updateOrder = threadRepository.update.mock.invocationCallOrder[0];
+    const updateOrder =
+      threadRepository.updateSummary.mock.invocationCallOrder[0];
     const generateOrder =
       anthropicService.getNextCharacterResponse.mock.invocationCallOrder[0];
     expect(updateOrder).toBeLessThan(generateOrder);
@@ -93,7 +94,7 @@ describe('summarization trigger', () => {
     await service.generateNextCharacterMessage({ threadId: 1 });
 
     expect(anthropicService.summarizeConversation).not.toHaveBeenCalled();
-    expect(threadRepository.update).not.toHaveBeenCalled();
+    expect(threadRepository.updateSummary).not.toHaveBeenCalled();
   });
 
   test('a failed summarization is swallowed and generation still succeeds', async () => {
@@ -108,7 +109,7 @@ describe('summarization trigger', () => {
     const result = await service.generateNextCharacterMessage({ threadId: 1 });
 
     expect(result).toBeDefined();
-    expect(threadRepository.update).not.toHaveBeenCalled();
+    expect(threadRepository.updateSummary).not.toHaveBeenCalled();
     expect(anthropicService.getNextCharacterResponse).toHaveBeenCalled();
     errorSpy.mockRestore();
   });

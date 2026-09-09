@@ -30,12 +30,28 @@ export default class MessageRepository {
         RETURNING id;`
     );
 
+    return rows[0].id;
+  }
+
+  async getById(id: string): Promise<Message> {
+    const { rows } = await this.db.query(
+      SQL`
+        SELECT 
+          id,
+          author,
+          content as message,
+          thread_id AS "threadId",
+          created_at AS "createdAt"
+        FROM message
+        WHERE id=${id};`
+    );
+
     const result = rows[0];
 
     if (!result) {
-      throw new NotFoundError(`Chat message could not be saved.`);
+      throw new NotFoundError(`Chat message could not be found.`);
     }
 
-    return result.id;
+    return result;
   }
 }

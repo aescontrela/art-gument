@@ -28,7 +28,7 @@ export default class ChatService {
         messages: overflow,
       });
 
-      await this.threadRepository.update({
+      await this.threadRepository.updateSummary({
         id: threadId,
         summary: newSummary,
         summarizedUntil: overflow[overflow.length - 1].createdAt,
