@@ -22,6 +22,7 @@ The architecture is deliberately simple. A single system prompt acts as the mode
 - Thread-based Chat System
 - AI Character Conversations
 - Rolling-Summary Conversation Memory
+- Conversation Mood Tracking
 - Anthropic Claude Integration
 
 ## Prerequisites
@@ -103,6 +104,8 @@ Copy `env-sample` to `.env` and fill in the necessary values, including database
 The OpenAPI spec is generated from the same Zod schemas that validate incoming requests. The API docs are served at [http://localhost:3000/api/docs](http://localhost:3000/api/docs).
 
 The interaction model is designed around a potential frontend chat, where the user can talk to a single character or to the whole group. Posting a user message only stores your question. Nothing is generated until you explicitly ask for a reply with a moderator message (the AI picks who speaks next) or a character message (a specific character answers). Each call adds one line to the conversation, so repeated moderator calls make the characters argue among themselves.
+
+Every generated turn also returns the mood of the room. After the reply is saved, a second (cheaper) model call reads the last 10 messages, with the rolling summary as background, and reports one of eight moods (`WEARY`, `MELANCHOLY`, `PLAYFUL`, `COCKY`, `ELECTRIC`, `CHAOTIC`, `PRICKLY`, `HEATED`) with an intensity from 1 to 5. The reading is saved on the thread and returned next to the messages as `{ "messages": [...], "mood": { "mood": "PRICKLY", "intensity": 3 } }`. `mood` is `null` for user messages, and when the mood reading fails: the failure is logged and the turn is still returned.
 
 ### Available Commands
 

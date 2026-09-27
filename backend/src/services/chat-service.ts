@@ -1,7 +1,7 @@
 import { NotFoundError } from '../errors/api-error';
 import MessageRepository from '../repositories/message-repository';
 import ThreadRepository from '../repositories/thread-repository';
-import { Character } from '../schema';
+import { Character, ChatMessage, Mood } from '../schema';
 import AnthropicService from './anthropic-service';
 
 const THREAD_WINDOW = 10;
@@ -41,6 +41,34 @@ export default class ChatService {
     }
   }
 
+  private async refreshMood({
+    threadId,
+    summary,
+    messages,
+  }: {
+    threadId: number;
+    summary: string | null;
+    messages: ChatMessage[];
+  }): Promise<{ mood: Mood; intensity: number } | null> {
+    try {
+      const { mood, intensity } =
+        await this.anthropicService.getConversationMood({
+          summary,
+          messages,
+        });
+
+      await this.threadRepository.updateMood({ id: threadId, mood, intensity });
+
+      return { mood, intensity };
+    } catch (err) {
+      console.error(
+        `Mood refresh failed for thread ${threadId}; continuing with stale mood`,
+        err
+      );
+      return null;
+    }
+  }
+
   private async updateThreadTurn(input: {
     threadId: number;
     turn: { character: Character; response: string }[];
@@ -56,6 +84,33 @@ export default class ChatService {
     const thread = await this.getThreadById(input.threadId);
 
     return thread;
+  }
+
+  private async runTurn(
+    threadId: number,
+    generate: (
+      recentMessages: ChatMessage[],
+      summary: string | null
+    ) => Promise<{ character: Character; response: string }[]>
+  ) {
+    await this.compactHistory(threadId);
+
+    const { summary, messages: recentMessages } = await this.getThreadById(
+      threadId,
+      THREAD_WINDOW
+    );
+
+    const turn = await generate(recentMessages, summary);
+
+    const { messages } = await this.updateThreadTurn({ threadId, turn });
+
+    const mood = await this.refreshMood({
+      threadId,
+      summary,
+      messages: messages.slice(-THREAD_WINDOW),
+    });
+
+    return { messages, mood };
   }
 
   async createThread() {
@@ -83,55 +138,22 @@ export default class ChatService {
 
     const thread = await this.getThreadById(input.threadId);
 
-    return thread.messages;
+    return { messages: thread.messages, mood: null };
   }
 
   async generateMessageAs(input: { threadId: number; character: Character }) {
-    await this.compactHistory(input.threadId);
-
-    const { summary, messages: recentMessages } = await this.getThreadById(
-      input.threadId,
-      THREAD_WINDOW
+    return await this.runTurn(input.threadId, (recentMessages, summary) =>
+      this.anthropicService.getCharacterTurn(
+        recentMessages,
+        input.character,
+        summary
+      )
     );
-
-    const turn = await this.anthropicService.getCharacterTurn(
-      recentMessages.map(({ author, message }) => ({
-        role: author !== 'user' ? 'assistant' : 'user',
-        content: message,
-      })),
-      input.character,
-      summary
-    );
-
-    const { messages } = await this.updateThreadTurn({
-      threadId: input.threadId,
-      turn,
-    });
-
-    return messages;
   }
 
   async generateModeratorTurn(input: { threadId: number }) {
-    await this.compactHistory(input.threadId);
-
-    const { summary, messages: recentMessages } = await this.getThreadById(
-      input.threadId,
-      THREAD_WINDOW
+    return await this.runTurn(input.threadId, (recentMessages, summary) =>
+      this.anthropicService.getModeratorTurn(recentMessages, summary)
     );
-
-    const turn = await this.anthropicService.getModeratorTurn(
-      recentMessages.map(({ author, message }) => ({
-        role: author !== 'user' ? 'assistant' : 'user',
-        content: message,
-      })),
-      summary
-    );
-
-    const { messages } = await this.updateThreadTurn({
-      threadId: input.threadId,
-      turn,
-    });
-
-    return messages;
   }
 }

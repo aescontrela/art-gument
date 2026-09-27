@@ -1,11 +1,14 @@
 import { SQL } from 'sql-template-strings';
 import DbPool from '../db';
 import { NotFoundError } from '../errors/api-error';
+import { Mood } from '../schema';
 import { Message } from './message-repository';
 
 type Thread = {
   id: number;
   summary: string | null;
+  mood: Mood | null;
+  intensity: number | null;
   messages: Message[];
 };
 
@@ -51,10 +54,35 @@ export default class ThreadRepository {
     return rows[0].id;
   }
 
+  async updateMood({
+    id,
+    mood,
+    intensity,
+  }: {
+    id: number;
+    mood: Mood;
+    intensity: number;
+  }): Promise<string> {
+    const { rows } = await this.db.query(
+      SQL`
+        UPDATE thread SET
+          mood = ${mood},
+          intensity = ${intensity}
+        WHERE id = ${id}
+        RETURNING id;`
+    );
+
+    if (rows.length === 0) {
+      throw new NotFoundError(`Thread could not be updated.`);
+    }
+
+    return rows[0].id;
+  }
+
   async getById(threadId: number, limit?: number): Promise<Thread> {
     const thread = await this.db.query(
       SQL`
-        SELECT id, summary FROM thread WHERE id = ${threadId};`
+        SELECT id, summary, mood, intensity FROM thread WHERE id = ${threadId};`
     );
 
     if (!thread.rows.length) {
@@ -85,7 +113,13 @@ export default class ThreadRepository {
 
     const { rows } = await this.db.query(query);
 
-    return { id: threadId, summary: thread.rows[0].summary, messages: rows };
+    return {
+      id: threadId,
+      summary: thread.rows[0].summary,
+      mood: thread.rows[0].mood,
+      intensity: thread.rows[0].intensity,
+      messages: rows,
+    };
   }
 
   async getThreadOverflow(
@@ -94,7 +128,7 @@ export default class ThreadRepository {
   ): Promise<Thread> {
     const thread = await this.db.query(
       SQL`
-        SELECT id, summary FROM thread WHERE id = ${threadId};`
+        SELECT id, summary, mood, intensity FROM thread WHERE id = ${threadId};`
     );
 
     if (!thread.rows.length) {
@@ -126,6 +160,12 @@ export default class ThreadRepository {
         ORDER BY overflow.created_at ASC;`
     );
 
-    return { id: threadId, summary: thread.rows[0].summary, messages: rows };
+    return {
+      id: threadId,
+      summary: thread.rows[0].summary,
+      mood: thread.rows[0].mood,
+      intensity: thread.rows[0].intensity,
+      messages: rows,
+    };
   }
 }
