@@ -34,10 +34,10 @@ function build({
   const messageRepository = { create: jest.fn().mockResolvedValue('msg-id') };
   const anthropicService = {
     summarizeConversation: jest.fn().mockResolvedValue('the new summary'),
-    getCharacterResponse: jest
+    getCharacterTurn: jest
       .fn()
       .mockResolvedValue([{ character: Character.BASQUIAT, response: 'yo' }]),
-    getNextCharacterResponse: jest
+    getModeratorTurn: jest
       .fn()
       .mockResolvedValue([{ character: Character.LOU_REED, response: 'nah' }]),
   };
@@ -59,7 +59,7 @@ describe('summarization trigger', () => {
       storedSummary: 'old summary',
     });
 
-    await service.generateNextCharacterMessage({ threadId: 1 });
+    await service.generateModeratorTurn({ threadId: 1 });
 
     expect(anthropicService.summarizeConversation).toHaveBeenCalledWith({
       existingSummary: 'old summary',
@@ -77,12 +77,12 @@ describe('summarization trigger', () => {
       overflow: messages(10),
     });
 
-    await service.generateNextCharacterMessage({ threadId: 1 });
+    await service.generateModeratorTurn({ threadId: 1 });
 
     const updateOrder =
       threadRepository.updateSummary.mock.invocationCallOrder[0];
     const generateOrder =
-      anthropicService.getNextCharacterResponse.mock.invocationCallOrder[0];
+      anthropicService.getModeratorTurn.mock.invocationCallOrder[0];
     expect(updateOrder).toBeLessThan(generateOrder);
   });
 
@@ -91,7 +91,7 @@ describe('summarization trigger', () => {
       overflow: messages(9),
     });
 
-    await service.generateNextCharacterMessage({ threadId: 1 });
+    await service.generateModeratorTurn({ threadId: 1 });
 
     expect(anthropicService.summarizeConversation).not.toHaveBeenCalled();
     expect(threadRepository.updateSummary).not.toHaveBeenCalled();
@@ -106,11 +106,11 @@ describe('summarization trigger', () => {
     );
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-    const result = await service.generateNextCharacterMessage({ threadId: 1 });
+    const result = await service.generateModeratorTurn({ threadId: 1 });
 
     expect(result).toBeDefined();
     expect(threadRepository.updateSummary).not.toHaveBeenCalled();
-    expect(anthropicService.getNextCharacterResponse).toHaveBeenCalled();
+    expect(anthropicService.getModeratorTurn).toHaveBeenCalled();
     errorSpy.mockRestore();
   });
 });
@@ -121,10 +121,10 @@ describe('context assembly', () => {
       storedSummary: 'what happened so far',
     });
 
-    await service.generateNextCharacterMessage({ threadId: 1 });
+    await service.generateModeratorTurn({ threadId: 1 });
 
     expect(threadRepository.getById).toHaveBeenCalledWith(1, 10);
-    expect(anthropicService.getNextCharacterResponse).toHaveBeenCalledWith(
+    expect(anthropicService.getModeratorTurn).toHaveBeenCalledWith(
       expect.any(Array),
       'what happened so far'
     );
@@ -133,12 +133,12 @@ describe('context assembly', () => {
   test('single-character generation also receives the summary', async () => {
     const { service, anthropicService } = build({ storedSummary: 'so far' });
 
-    await service.generateCharacterMessage({
+    await service.generateMessageAs({
       threadId: 1,
       character: Character.BASQUIAT,
     });
 
-    expect(anthropicService.getCharacterResponse).toHaveBeenCalledWith(
+    expect(anthropicService.getCharacterTurn).toHaveBeenCalledWith(
       expect.any(Array),
       Character.BASQUIAT,
       'so far'

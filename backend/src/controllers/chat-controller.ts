@@ -44,6 +44,7 @@ export default class ChatController {
   ): Promise<void> {
     try {
       let response;
+
       if (req.body.type === 'user') {
         response = await this.chatService.processUserMessage({
           threadId: Number(req.params.id),
@@ -51,13 +52,13 @@ export default class ChatController {
         });
         res.status(201).json(response);
       } else if (req.body.type === 'character') {
-        response = await this.chatService.generateCharacterMessage({
+        response = await this.chatService.generateMessageAs({
           threadId: Number(req.params.id),
           character: req.body.character,
         });
         res.status(201).json(response);
       } else if (req.body.type === 'moderator') {
-        response = await this.chatService.generateNextCharacterMessage({
+        response = await this.chatService.generateModeratorTurn({
           threadId: Number(req.params.id),
         });
         res.status(201).json(response);

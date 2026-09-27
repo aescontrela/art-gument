@@ -49,12 +49,12 @@ export default class AnthropicService {
     return `${systemPrompt}\n\n<conversation_summary>\n${summary}\n</conversation_summary>`;
   }
 
-  async getCharacterResponse(
+  async getCharacterTurn(
     conversationHistory: ChatMessage[] = [],
     character: Character,
     summary?: string | null
   ): Promise<CharacterResponse[]> {
-    return await this._generateCharacterResponse({
+    return await this._generateTurn({
       conversationHistory,
       systemPrompt: this.compactConversation(prompts.SINGLE_CHARACTER, summary),
       newMessage: {
@@ -64,11 +64,11 @@ export default class AnthropicService {
     });
   }
 
-  async getNextCharacterResponse(
+  async getModeratorTurn(
     conversationHistory: ChatMessage[] = [],
     summary?: string | null
   ): Promise<CharacterResponse[]> {
-    const response = await this._generateCharacterResponse({
+    const response = await this._generateTurn({
       conversationHistory,
       systemPrompt: this.compactConversation(prompts.NEXT_CHARACTER, summary),
       newMessage: {
@@ -117,7 +117,7 @@ export default class AnthropicService {
     return text.text.trim();
   }
 
-  private async _generateCharacterResponse({
+  private async _generateTurn({
     newMessage,
     conversationHistory = [],
     systemPrompt,

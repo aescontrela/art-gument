@@ -35,10 +35,27 @@ export default class ChatService {
       });
     } catch (err) {
       console.error(
-        `Summarization failed for thread ${threadId}; continuing with stale summary`,
+        `Compact history failed for thread ${threadId}; continuing with stale summary`,
         err
       );
     }
+  }
+
+  private async updateThreadTurn(input: {
+    threadId: number;
+    turn: { character: Character; response: string }[];
+  }) {
+    for (const { character, response } of input.turn) {
+      await this.messageRepository.create({
+        threadId: input.threadId,
+        author: character,
+        message: response,
+      });
+    }
+
+    const thread = await this.getThreadById(input.threadId);
+
+    return thread;
   }
 
   async createThread() {
@@ -64,64 +81,57 @@ export default class ChatService {
       message: input.message,
     });
 
-    const updatedThread = await this.getThreadById(input.threadId);
+    const thread = await this.getThreadById(input.threadId);
 
-    return updatedThread.messages;
+    return thread.messages;
   }
 
-  async generateCharacterMessage(input: {
-    threadId: number;
-    character: Character;
-  }) {
+  async generateMessageAs(input: { threadId: number; character: Character }) {
     await this.compactHistory(input.threadId);
 
-    const thread = await this.getThreadById(input.threadId, THREAD_WINDOW);
+    const { summary, messages: recentMessages } = await this.getThreadById(
+      input.threadId,
+      THREAD_WINDOW
+    );
 
-    const results = await this.anthropicService.getCharacterResponse(
-      thread.messages.map(({ author, message }) => ({
+    const turn = await this.anthropicService.getCharacterTurn(
+      recentMessages.map(({ author, message }) => ({
         role: author !== 'user' ? 'assistant' : 'user',
         content: message,
       })),
       input.character,
-      thread.summary
+      summary
     );
 
-    for (const result of results) {
-      await this.messageRepository.create({
-        threadId: input.threadId,
-        author: result.character,
-        message: result.response,
-      });
-    }
+    const { messages } = await this.updateThreadTurn({
+      threadId: input.threadId,
+      turn,
+    });
 
-    const updatedThread = await this.getThreadById(input.threadId);
-
-    return updatedThread.messages;
+    return messages;
   }
 
-  async generateNextCharacterMessage(input: { threadId: number }) {
+  async generateModeratorTurn(input: { threadId: number }) {
     await this.compactHistory(input.threadId);
 
-    const thread = await this.getThreadById(input.threadId, THREAD_WINDOW);
+    const { summary, messages: recentMessages } = await this.getThreadById(
+      input.threadId,
+      THREAD_WINDOW
+    );
 
-    const results = await this.anthropicService.getNextCharacterResponse(
-      thread.messages.map(({ author, message }) => ({
+    const turn = await this.anthropicService.getModeratorTurn(
+      recentMessages.map(({ author, message }) => ({
         role: author !== 'user' ? 'assistant' : 'user',
         content: message,
       })),
-      thread.summary
+      summary
     );
 
-    for (const result of results) {
-      await this.messageRepository.create({
-        threadId: input.threadId,
-        author: result.character,
-        message: result.response,
-      });
-    }
+    const { messages } = await this.updateThreadTurn({
+      threadId: input.threadId,
+      turn,
+    });
 
-    const updatedThread = await this.getThreadById(input.threadId);
-
-    return updatedThread.messages;
+    return messages;
   }
 }
