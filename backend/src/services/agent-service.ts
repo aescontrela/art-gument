@@ -4,24 +4,36 @@ import prompts from '../agent/prompts';
 import characterResponseTool from '../agent/tools/character-response-tool';
 import conversationMoodTool from '../agent/tools/conversation-mood';
 import { InternalServerError, ValidationError } from '../errors/api-error';
-import { ChatMessage, Character, Mood } from '../schema';
+import {
+  Character,
+  CharacterResponse,
+  ChatMessage,
+  ConversationContext,
+  ConversationMood,
+  Mood,
+  Round,
+} from '../schema';
 
-const CharacterResponseSchema = z.object({
+const CharacterResponseSchema: z.ZodType<CharacterResponse> = z.object({
   character: z.enum(Character),
   response: z.string(),
+  reasoning: z.string(),
+  floorToUser: z.boolean(),
 });
 
-type CharacterResponse = z.infer<typeof CharacterResponseSchema>;
-
-const MoodResponseSchema = z.object({
+const ConversationMoodSchema: z.ZodType<ConversationMood> = z.object({
   reasoning: z.string(),
   mood: z.enum(Mood),
   intensity: z.number().int().min(1).max(5),
 });
 
-type MoodResponse = z.infer<typeof MoodResponseSchema>;
+type GenerateRoundInput = {
+  instruction: string;
+  conversationHistory?: ChatMessage[];
+  systemPrompt?: string;
+};
 
-export default class AnthropicService {
+export default class AgentService {
   private readonly anthropic: Anthropic;
   private readonly model = 'claude-opus-5';
   private readonly maxTokens = 8000;
@@ -52,15 +64,11 @@ export default class AnthropicService {
     return `${systemPrompt}\n\n<conversation_summary>\n${summary}\n</conversation_summary>`;
   }
 
-  private async generateTurn({
+  private async generateRound({
     instruction,
     conversationHistory = [],
     systemPrompt,
-  }: {
-    instruction: string;
-    conversationHistory?: ChatMessage[];
-    systemPrompt?: string;
-  }): Promise<CharacterResponse[]> {
+  }: GenerateRoundInput): Promise<Round> {
     const results = await this.anthropic.messages.create({
       model: this.model,
       system: systemPrompt,
@@ -109,10 +117,7 @@ export default class AnthropicService {
   async getConversationMood({
     messages,
     summary,
-  }: {
-    messages: ChatMessage[];
-    summary?: string | null;
-  }): Promise<MoodResponse> {
+  }: ConversationContext): Promise<ConversationMood> {
     const transcript = messages
       .map(({ author, message }) => `${author}: ${message}`)
       .join('\n');
@@ -141,7 +146,7 @@ export default class AnthropicService {
       );
     }
 
-    const parsedResult = MoodResponseSchema.safeParse(toolUse.input);
+    const parsedResult = ConversationMoodSchema.safeParse(toolUse.input);
 
     if (parsedResult.error) {
       throw new ValidationError(
@@ -153,39 +158,22 @@ export default class AnthropicService {
     return parsedResult.data;
   }
 
-  async getCharacterTurn(
-    conversationHistory: ChatMessage[] = [],
-    character: Character,
-    summary?: string | null
-  ): Promise<CharacterResponse[]> {
-    return await this.generateTurn({
-      conversationHistory,
-      systemPrompt: this.compactConversation(prompts.SINGLE_CHARACTER, summary),
-      instruction: `${character} speaks next. Respond as ${character}.`,
-    });
-  }
-
-  async getModeratorTurn(
-    conversationHistory: ChatMessage[] = [],
-    summary?: string | null
-  ): Promise<CharacterResponse[]> {
-    const response = await this.generateTurn({
-      conversationHistory,
-      systemPrompt: this.compactConversation(prompts.NEXT_CHARACTER, summary),
+  async getModeratorRound({
+    messages,
+    summary,
+  }: ConversationContext): Promise<Round> {
+    return await this.generateRound({
+      conversationHistory: messages,
+      systemPrompt: this.compactConversation(prompts.ROUND, summary),
       instruction:
-        'Choose the next speaker — a different character than whoever spoke last — and respond as them.',
+        'Play the next round: continue the conversation line by line until a moment naturally turns the floor toward the user, then stop.',
     });
-
-    return response;
   }
 
   async summarizeConversation({
-    existingSummary,
     messages,
-  }: {
-    existingSummary: string | null;
-    messages: ChatMessage[];
-  }): Promise<string> {
+    summary,
+  }: ConversationContext): Promise<string> {
     const transcript = messages
       .map(({ author, message }) => `${author}: ${message}`)
       .join('\n');
@@ -197,7 +185,7 @@ export default class AnthropicService {
       messages: [
         {
           role: 'user',
-          content: `Existing summary:\n${existingSummary ?? 'None yet.'}\n\nNew messages:\n${transcript}`,
+          content: `Existing summary:\n${summary ?? 'None yet.'}\n\nNew messages:\n${transcript}`,
         },
       ],
     });

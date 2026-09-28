@@ -36,7 +36,7 @@ describe('ThreadRepository', () => {
 
   test('selects thread by id', async () => {
     const threadId = await threadRepository.create();
-    const result = await threadRepository.getById(threadId);
+    const result = await threadRepository.getById({ threadId });
     expect(result).toMatchObject({
       id: threadId,
       summary: null,
@@ -54,7 +54,7 @@ describe('ThreadRepository', () => {
       });
     }
 
-    const result = await threadRepository.getById(threadId, 2);
+    const result = await threadRepository.getById({ threadId, limit: 2 });
 
     expect(result.messages.map(({ message }) => message)).toEqual([
       'two',
@@ -63,6 +63,8 @@ describe('ThreadRepository', () => {
   });
 
   test('throws not found error when thrad not found', async () => {
-    await expect(threadRepository.getById(3)).rejects.toThrow(NotFoundError);
+    await expect(threadRepository.getById({ threadId: 3 })).rejects.toThrow(
+      NotFoundError
+    );
   });
 });

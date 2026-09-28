@@ -1,10 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { APIError } from '../errors/api-error';
-import {
-  GetThreadParams,
-  PostThreadBody,
-  PostThreadMessage,
-} from '../schema/api/chat-schema';
+import { GetThreadParams, PostThreadBody, PostThreadMessage } from '../schema';
 import ChatService from '../services/chat-service';
 
 export default class ChatController {
@@ -46,19 +42,13 @@ export default class ChatController {
       let response;
 
       if (req.body.type === 'user') {
-        response = await this.chatService.processUserMessage({
+        response = await this.chatService.runUserTurn({
           threadId: Number(req.params.id),
           message: req.body.message,
         });
         res.status(201).json(response);
-      } else if (req.body.type === 'character') {
-        response = await this.chatService.generateMessageAs({
-          threadId: Number(req.params.id),
-          character: req.body.character,
-        });
-        res.status(201).json(response);
       } else if (req.body.type === 'moderator') {
-        response = await this.chatService.generateModeratorTurn({
+        response = await this.chatService.runModeratorRound({
           threadId: Number(req.params.id),
         });
         res.status(201).json(response);

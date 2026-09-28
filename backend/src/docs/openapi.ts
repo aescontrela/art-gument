@@ -2,7 +2,7 @@ import path from 'path';
 import swaggerJsdoc from 'swagger-jsdoc';
 import { z } from 'zod';
 import { Character } from '../schema';
-import { PostThreadMessageSchema } from '../schema/api/chat-schema';
+import { PostThreadMessageSchema } from '../schema/api/chat';
 
 export default swaggerJsdoc({
   definition: {

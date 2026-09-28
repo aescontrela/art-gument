@@ -1,15 +1,7 @@
 import { SQL } from 'sql-template-strings';
 import DbPool from '../db';
 import { NotFoundError } from '../errors/api-error';
-import { Author } from '../schema';
-
-export type Message = {
-  id: string;
-  author: Author;
-  message: string;
-  threadId: number;
-  createdAt: Date;
-};
+import { CreateMessageInput, GetMessageByIdInput, Message } from '../schema';
 
 export default class MessageRepository {
   constructor(private db = new DbPool()) {}
@@ -18,7 +10,7 @@ export default class MessageRepository {
     author,
     message,
     threadId,
-  }: Pick<Message, 'author' | 'message' | 'threadId'>): Promise<string> {
+  }: CreateMessageInput): Promise<string> {
     const { rows } = await this.db.query(
       SQL`
         INSERT INTO message (author, content, thread_id) 
@@ -33,7 +25,7 @@ export default class MessageRepository {
     return rows[0].id;
   }
 
-  async getById(id: string): Promise<Message> {
+  async getById({ id }: GetMessageByIdInput): Promise<Message> {
     const { rows } = await this.db.query(
       SQL`
         SELECT 

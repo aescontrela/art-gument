@@ -5,7 +5,7 @@ import {
   GetThreadRequestSchema,
   PostThreadMessageSchema,
   PostThreadRequestSchema,
-} from '../schema/api/chat-schema';
+} from '../schema/api/chat';
 
 const router = Router();
 

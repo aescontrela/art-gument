@@ -26,8 +26,13 @@ const characterTool: Tool = {
           'Why this character speaks next and what this line adds to the conversation',
         maxLength: 100,
       },
+      floorToUser: {
+        type: 'boolean',
+        description:
+          'True only when this line turns the floor toward the user, ending the round',
+      },
     },
-    required: ['character', 'response', 'reasoning'],
+    required: ['character', 'response', 'reasoning', 'floorToUser'],
     additionalProperties: false,
   },
 };

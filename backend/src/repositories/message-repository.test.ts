@@ -46,7 +46,7 @@ describe('MessageRepository', () => {
       threadId: rows[0].id,
     });
 
-    const message = await messageRepository.getById(messageId);
+    const message = await messageRepository.getById({ id: messageId });
 
     expect(message).toMatchObject({
       id: messageId,
@@ -60,7 +60,7 @@ describe('MessageRepository', () => {
     await db.query(SQL`INSERT INTO thread DEFAULT VALUES RETURNING id;`);
 
     await expect(
-      messageRepository.getById('00000000-0000-0000-0000-000000000000')
+      messageRepository.getById({ id: '00000000-0000-0000-0000-000000000000' })
     ).rejects.toThrow(NotFoundError);
   });
 });

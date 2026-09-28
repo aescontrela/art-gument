@@ -1,16 +1,13 @@
 import { SQL } from 'sql-template-strings';
 import DbPool from '../db';
 import { NotFoundError } from '../errors/api-error';
-import { Mood } from '../schema';
-import { Message } from './message-repository';
-
-type Thread = {
-  id: number;
-  summary: string | null;
-  mood: Mood | null;
-  intensity: number | null;
-  messages: Message[];
-};
+import {
+  GetThreadByIdInput,
+  GetThreadOverflowInput,
+  Thread,
+  UpdateThreadMoodInput,
+  UpdateThreadSummaryInput,
+} from '../schema';
 
 export default class ThreadRepository {
   constructor(private db = new DbPool()) {}
@@ -33,11 +30,7 @@ export default class ThreadRepository {
     id,
     summary,
     summarizedUntil,
-  }: {
-    id: number;
-    summary: string;
-    summarizedUntil: Date;
-  }): Promise<string> {
+  }: UpdateThreadSummaryInput): Promise<string> {
     const { rows } = await this.db.query(
       SQL`
         UPDATE thread SET
@@ -58,11 +51,7 @@ export default class ThreadRepository {
     id,
     mood,
     intensity,
-  }: {
-    id: number;
-    mood: Mood;
-    intensity: number;
-  }): Promise<string> {
+  }: UpdateThreadMoodInput): Promise<string> {
     const { rows } = await this.db.query(
       SQL`
         UPDATE thread SET
@@ -79,7 +68,7 @@ export default class ThreadRepository {
     return rows[0].id;
   }
 
-  async getById(threadId: number, limit?: number): Promise<Thread> {
+  async getById({ threadId, limit }: GetThreadByIdInput): Promise<Thread> {
     const thread = await this.db.query(
       SQL`
         SELECT id, summary, mood, intensity FROM thread WHERE id = ${threadId};`
@@ -122,10 +111,10 @@ export default class ThreadRepository {
     };
   }
 
-  async getThreadOverflow(
-    threadId: number,
-    windowSize: number
-  ): Promise<Thread> {
+  async getThreadOverflow({
+    threadId,
+    windowSize,
+  }: GetThreadOverflowInput): Promise<Thread> {
     const thread = await this.db.query(
       SQL`
         SELECT id, summary, mood, intensity FROM thread WHERE id = ${threadId};`
