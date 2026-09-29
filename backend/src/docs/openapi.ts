@@ -1,7 +1,7 @@
 import path from 'path';
 import swaggerJsdoc from 'swagger-jsdoc';
 import { z } from 'zod';
-import { Character } from '../schema';
+import { Character, Mood } from '../schema';
 import { PostThreadMessageSchema } from '../schema/api/chat';
 
 export default swaggerJsdoc({
@@ -12,9 +12,10 @@ export default swaggerJsdoc({
       version: '1.0.0',
       description:
         'AI-powered conversations with 1980s NYC art scene figures: Jean-Michel ' +
-        'Basquiat, Keith Haring, Lou Reed, and Richard Hell. Posting a `user` ' +
-        'message only stores it, send a `moderator` or `character` message to ' +
-        'generate a reply.',
+        'Basquiat, Keith Haring, Lou Reed, and Richard Hell. The game has two ' +
+        'moves: post the user message (stored, no reply), then play a round — ' +
+        'the AI moderator casts characters line by line until the floor turns ' +
+        'back to the user. Each round also refreshes the conversation mood.',
     },
     components: {
       parameters: {
@@ -36,8 +37,38 @@ export default swaggerJsdoc({
               enum: ['user', ...Object.values(Character)],
             },
             message: { type: 'string' },
+            threadId: { type: 'integer' },
+            createdAt: { type: 'string', format: 'date-time' },
           },
-          required: ['id', 'author', 'message'],
+          required: ['id', 'author', 'message', 'threadId', 'createdAt'],
+        },
+        Mood: {
+          type: 'string',
+          enum: Object.values(Mood),
+          nullable: true,
+          description: 'The conversation mood; null before the first reading',
+        },
+        MoodReading: {
+          type: 'object',
+          nullable: true,
+          description:
+            'Refreshed mood after a round; null when the reading failed or was not taken',
+          properties: {
+            mood: { $ref: '#/components/schemas/Mood' },
+            intensity: { type: 'integer', minimum: 1, maximum: 5 },
+          },
+          required: ['mood', 'intensity'],
+        },
+        TurnResult: {
+          type: 'object',
+          properties: {
+            messages: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/Message' },
+            },
+            mood: { $ref: '#/components/schemas/MoodReading' },
+          },
+          required: ['messages', 'mood'],
         },
         ErrorResponse: {
           type: 'object',

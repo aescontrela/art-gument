@@ -1,13 +1,16 @@
 import { NextFunction, Request, Response } from 'express';
-import { APIError } from '../errors/api-error';
-import { GetThreadParams, PostThreadBody, PostThreadMessage } from '../schema';
+import { GetThread, PostThreadMessage, PostThreadRound } from '../schema';
 import ChatService from '../services/chat-service';
 
 export default class ChatController {
   constructor(private readonly chatService = new ChatService()) {}
 
   async getThread(
-    req: Request<GetThreadParams, Record<string, never>, Record<string, never>>,
+    req: Request<
+      GetThread['params'],
+      Record<string, never>,
+      Record<string, never>
+    >,
     res: Response,
     next: NextFunction
   ): Promise<void> {
@@ -21,7 +24,7 @@ export default class ChatController {
   }
 
   async postThread(
-    _req: Request<Record<string, never>, Record<string, never>, PostThreadBody>,
+    _req: Request,
     res: Response,
     next: NextFunction
   ): Promise<void> {
@@ -40,23 +43,49 @@ export default class ChatController {
   ): Promise<void> {
     try {
       let response;
-
-      if (req.body.type === 'user') {
-        response = await this.chatService.runUserTurn({
-          threadId: Number(req.params.id),
-          message: req.body.message,
-        });
-        res.status(201).json(response);
-      } else if (req.body.type === 'moderator') {
-        response = await this.chatService.runModeratorRound({
-          threadId: Number(req.params.id),
-        });
-        res.status(201).json(response);
-      } else {
-        throw new APIError(`Unknown message type: ${req.body['type']}`, 400);
-      }
+      response = await this.chatService.runUserTurn({
+        threadId: Number(req.params.id),
+        message: req.body.message,
+      });
+      res.status(201).json(response);
     } catch (error) {
       next(error);
+    }
+  }
+
+  async postThreadRound(
+    req: Request<PostThreadRound['params'], never, never>,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const abort = new AbortController();
+    req.on('close', () => abort.abort());
+
+    try {
+      const round = this.chatService.runModeratorRound({
+        threadId: Number(req.params.id),
+        signal: abort.signal,
+      });
+
+      for await (const event of round) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+
+      res.end();
+    } catch (error) {
+      if (!res.headersSent) {
+        next(error);
+        return;
+      }
+
+      if (!abort.signal.aborted) {
+        res.write(`data: ${JSON.stringify({ type: 'error' })}\n\n`);
+      }
+      res.end();
     }
   }
 }

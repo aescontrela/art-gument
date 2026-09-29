@@ -111,34 +111,45 @@ The OpenAPI spec is generated from the same Zod schemas that validate incoming r
 
 ### Chat API
 
+The conversation is a game with two moves: the user says something, and the party plays a **round**. The AI moderator casts the characters line by line until one of them naturally turns the floor back to the user.
+
 - `POST /api/chat/thread` - Create a new conversation thread, returns its ID
-- `GET /api/chat/thread/:id` - Get the thread with its summary, last mood reading (`mood` and `intensity`, `null` until the first generated turn) and full message history
-- `POST /api/chat/thread/:id/messages` - Add a message to the thread
+- `GET /api/chat/thread/:id` - Get the thread with its summary, last mood reading (`mood` and `intensity`, `null` until the first round) and full message history
+- `POST /api/chat/thread/:id/message` - The user's turn: stores the message, generates nothing
+- `POST /api/chat/thread/:id/round` - The party's turn: streams a round of dialogue as Server-Sent Events
 
-`POST /api/chat/thread/:id/messages` takes one of three bodies:
-
-| `type`      | Extra fields | What happens                                       |
-| ----------- | ------------ | -------------------------------------------------- |
-| `user`      | `message`    | Stores the message. Nothing is generated.          |
-| `moderator` | -            | The AI picks who speaks next and responds as them. |
-| `character` | `character`  | The given character responds.                      |
-
-It responds with the updated message history and the current mood of the conversation:
+`POST /api/chat/thread/:id/message` takes `{ "message": "..." }` and responds with the updated history:
 
 ```json
 {
   "messages": [
     {
       "id": "0b9c1f5e-6a5d-4c59-9d0b-3f1f4c1c2a77",
-      "author": "LOU_REED",
+      "author": "user",
       "message": "...",
       "threadId": 1,
       "createdAt": "2026-09-27T18:04:11.000Z"
     }
   ],
-  "mood": { "mood": "PRICKLY", "intensity": 3 }
+  "mood": null
 }
 ```
+
+`POST /api/chat/thread/:id/round` takes no body and responds with a `text/event-stream`: one `data: <json>` frame per event, as the model generates them.
+
+```
+data: {"type":"line","line":{"character":"RICHARD_HELL","response":"...","reasoning":"...","floorToUser":false}}
+
+data: {"type":"line","line":{"character":"KEITH_HARING","response":"...","reasoning":"...","floorToUser":true}}
+
+data: {"type":"mood","mood":{"mood":"PRICKLY","intensity":3}}
+```
+
+- Each `line` event is one line of dialogue, already persisted to the thread. The final line of a round carries `floorToUser: true` — the moment the party hands the conversation back to the user.
+- The stream ends with one `mood` event (the refreshed reading, or `null` if the reading failed).
+- A failure mid-stream emits `{"type":"error"}` and closes; lines already streamed stay persisted.
+- Closing the connection aborts generation; lines already streamed stay persisted.
+- Errors before the first frame are plain JSON responses: `404` for an unknown thread, `409` if a round is already in progress for the thread.
 
 ### Character System
 
@@ -155,7 +166,7 @@ Each generation call sees the last 10 messages verbatim plus a rolling summary o
 
 ### Conversation Mood
 
-After every generated turn (`moderator` or `character`), a second model call reads the last 10 messages, with the rolling summary as background, and reports the mood of the room. The reading is saved on the thread (`mood` and `intensity` columns) and returned in the response.
+After every round, a second model call reads the last 10 messages, with the rolling summary as background, and reports the mood of the room. The reading is saved on the thread (`mood` and `intensity` columns) and delivered as the round's final stream event.
 
 - `mood` is one of the values below
 - `intensity` goes from 1 (a faint undertone) to 5 (it has taken over completely)
@@ -173,8 +184,8 @@ After every generated turn (`moderator` or `character`), a second model call rea
 
 `mood` is `null` when:
 
-- the message is a `user` message, since the mood is only read after a generated turn
-- the mood reading fails. The failure is logged and the turn is still returned, the thread keeps its previous mood
+- the response is to a user message, since the mood is only read after a round
+- the mood reading fails. The failure is logged and the round still completes, the thread keeps its previous mood
 
 ### Example Usage
 
@@ -188,31 +199,15 @@ curl -X POST http://localhost:3000/api/chat/thread \
 **Send a user message:**
 
 ```bash
-curl -X POST http://localhost:3000/api/chat/thread/1/messages \
+curl -X POST http://localhost:3000/api/chat/thread/1/message \
   -H "Content-Type: application/json" \
-  -d '{
-    "type": "user",
-    "message": "Tell me about your experience in the NYC art scene"
-  }'
+  -d '{ "message": "Tell me about your experience in the NYC art scene" }'
 ```
 
-**Let the moderator pick who speaks next:**
+**Play a round (watch the stream with `-N`):**
 
 ```bash
-curl -X POST http://localhost:3000/api/chat/thread/1/messages \
-  -H "Content-Type: application/json" \
-  -d '{ "type": "moderator" }'
-```
-
-**Make a specific character respond:**
-
-```bash
-curl -X POST http://localhost:3000/api/chat/thread/1/messages \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "character",
-    "character": "BASQUIAT"
-  }'
+curl -N -X POST http://localhost:3000/api/chat/thread/1/round
 ```
 
 **Get thread history:**

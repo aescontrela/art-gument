@@ -10,32 +10,37 @@ export default class MessageRepository {
     author,
     message,
     threadId,
-  }: CreateMessageInput): Promise<string> {
+  }: CreateMessageInput): Promise<Message> {
     const { rows } = await this.db.query(
       SQL`
-        INSERT INTO message (author, content, thread_id) 
+        INSERT INTO message (author, content, thread_id)
         VALUES (
           ${author},
           ${message},
           ${threadId}
         )
-        RETURNING id;`
+        RETURNING
+          id,
+          author,
+          content as message,
+          thread_id as "threadId",
+          created_at as "createdAt";`
     );
 
-    return rows[0].id;
+    return rows[0];
   }
 
   async getById({ id }: GetMessageByIdInput): Promise<Message> {
     const { rows } = await this.db.query(
       SQL`
-        SELECT 
+        SELECT
           id,
           author,
           content as message,
           thread_id AS "threadId",
           created_at AS "createdAt"
         FROM message
-        WHERE id=${id};`
+        WHERE id = ${id};`
     );
 
     const result = rows[0];

@@ -1,13 +1,19 @@
-import { NotFoundError } from '../errors/api-error';
+import { APIError, NotFoundError } from '../errors/api-error';
 import MessageRepository from '../repositories/message-repository';
 import ThreadRepository from '../repositories/thread-repository';
-import { ChatMessage, Mood, Round } from '../schema';
+import { CharacterResponse, ChatMessage, Mood } from '../schema';
 import AgentService from './agent-service';
+
+export type RoundEvent =
+  | { type: 'line'; line: CharacterResponse }
+  | { type: 'mood'; mood: { mood: Mood; intensity: number } | null };
 
 const THREAD_WINDOW = 10;
 const SUMMARY_CHUNK_SIZE = 10;
 
 export default class ChatService {
+  private readonly activeThreads = new Set<number>();
+
   constructor(
     private readonly messageRepository = new MessageRepository(),
     private readonly threadRepository = new ThreadRepository(),
@@ -71,20 +77,6 @@ export default class ChatService {
     }
   }
 
-  private async updateThreadTurn(input: { threadId: number; turn: Round }) {
-    for (const { character, response } of input.turn) {
-      await this.messageRepository.create({
-        threadId: input.threadId,
-        author: character,
-        message: response,
-      });
-    }
-
-    const thread = await this.getThreadById(input.threadId);
-
-    return thread;
-  }
-
   async createThread() {
     return await this.threadRepository.create();
   }
@@ -113,30 +105,55 @@ export default class ChatService {
     return { messages: thread.messages, mood: null };
   }
 
-  async runModeratorRound(input: { threadId: number }) {
-    await this.compactHistory(input.threadId);
+  async *runModeratorRound(input: {
+    threadId: number;
+    signal?: AbortSignal;
+  }): AsyncGenerator<RoundEvent> {
+    if (this.activeThreads.has(input.threadId)) {
+      throw new APIError(
+        `A round is already in progress for thread ${input.threadId}`,
+        409
+      );
+    }
 
-    const { summary, messages: recentMessages } = await this.getThreadById(
-      input.threadId,
-      THREAD_WINDOW
-    );
+    this.activeThreads.add(input.threadId);
 
-    const turn = await this.agentService.getModeratorRound({
-      messages: recentMessages,
-      summary,
-    });
+    try {
+      await this.compactHistory(input.threadId);
 
-    const { messages } = await this.updateThreadTurn({
-      threadId: input.threadId,
-      turn,
-    });
+      const { summary, messages: recentMessages } = await this.getThreadById(
+        input.threadId,
+        THREAD_WINDOW
+      );
 
-    const mood = await this.refreshMood({
-      threadId: input.threadId,
-      summary,
-      messages: messages.slice(-THREAD_WINDOW),
-    });
+      const round = this.agentService.streamModeratorRound(
+        { messages: recentMessages, summary },
+        input.signal
+      );
 
-    return { messages, mood };
+      const newLines: ChatMessage[] = [];
+
+      for await (const line of round) {
+        await this.messageRepository.create({
+          threadId: input.threadId,
+          author: line.character,
+          message: line.response,
+        });
+
+        newLines.push({ author: line.character, message: line.response });
+
+        yield { type: 'line', line };
+      }
+
+      const mood = await this.refreshMood({
+        threadId: input.threadId,
+        summary,
+        messages: [...recentMessages, ...newLines].slice(-THREAD_WINDOW),
+      });
+
+      yield { type: 'mood', mood };
+    } finally {
+      this.activeThreads.delete(input.threadId);
+    }
   }
 }

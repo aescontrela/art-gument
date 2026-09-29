@@ -2,9 +2,9 @@ import { Router } from 'express';
 import ChatController from '../controllers/chat-controller';
 import validateRequest from '../middleware/validation-middleware';
 import {
-  GetThreadRequestSchema,
+  GetThreadSchema,
   PostThreadMessageSchema,
-  PostThreadRequestSchema,
+  PostThreadRoundSchema,
 } from '../schema/api/chat';
 
 const router = Router();
@@ -24,11 +24,7 @@ const controller = new ChatController();
  *             schema:
  *               type: integer
  */
-router.post(
-  '/thread',
-  validateRequest(PostThreadRequestSchema),
-  controller.postThread.bind(controller)
-);
+router.post('/thread', controller.postThread.bind(controller));
 
 /**
  * @openapi
@@ -39,7 +35,7 @@ router.post(
  *       - $ref: '#/components/parameters/ThreadId'
  *     responses:
  *       200:
- *         description: The thread with its full message history
+ *         description: The thread with its full message history and current mood
  *         content:
  *           application/json:
  *             schema:
@@ -47,6 +43,17 @@ router.post(
  *               properties:
  *                 id:
  *                   type: integer
+ *                 summary:
+ *                   type: string
+ *                   nullable: true
+ *                   description: Compressed memory of messages no longer in the recent window
+ *                 mood:
+ *                   $ref: '#/components/schemas/Mood'
+ *                 intensity:
+ *                   type: integer
+ *                   nullable: true
+ *                   minimum: 1
+ *                   maximum: 5
  *                 messages:
  *                   type: array
  *                   items:
@@ -60,20 +67,19 @@ router.post(
  */
 router.get(
   '/thread/:id',
-  validateRequest(GetThreadRequestSchema),
+  validateRequest(GetThreadSchema),
   controller.getThread.bind(controller)
 );
 
 /**
  * @openapi
- * /api/chat/thread/{id}/messages:
+ * /api/chat/thread/{id}/message:
  *   post:
- *     summary: Send a message to the thread
+ *     summary: Post the user's message (the user's turn)
  *     description: >
- *       A `user` message is stored without generating a reply. Send
- *       `{"type": "moderator"}` to let the AI moderator pick who speaks next,
- *       or `{"type": "character", "character": "..."}` to make a specific
- *       character respond. Each call adds one line to the conversation.
+ *       Stores the visitor's message in the thread without generating any
+ *       reply. To have the party respond, follow up with a round via
+ *       `POST /thread/{id}/round`.
  *     parameters:
  *       - $ref: '#/components/parameters/ThreadId'
  *     requestBody:
@@ -83,14 +89,12 @@ router.get(
  *           schema:
  *             $ref: '#/components/schemas/PostThreadMessageBody'
  *     responses:
- *       200:
- *         description: The updated message history
+ *       201:
+ *         description: The updated message history (mood is not re-read on a user turn)
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Message'
+ *               $ref: '#/components/schemas/TurnResult'
  *       404:
  *         description: Thread not found
  *         content:
@@ -105,9 +109,57 @@ router.get(
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
-  '/thread/:id/messages',
+  '/thread/:id/message',
   validateRequest(PostThreadMessageSchema),
   controller.postThreadMessage.bind(controller)
+);
+
+/**
+ * @openapi
+ * /api/chat/thread/{id}/round:
+ *   post:
+ *     summary: Play a moderator round (the party's turn)
+ *     description: >
+ *       The AI moderator plays the conversation forward line by line,
+ *       casting whichever characters the moment calls for, until a line
+ *       naturally turns the floor back toward the user. Takes no request
+ *       body. The response is a Server-Sent Events stream: one
+ *       `data: <json>` frame per event, in order — a `line` event per
+ *       generated line (`{"type":"line","line":{character, response,
+ *       reasoning, floorToUser}}`, the final line carrying
+ *       `floorToUser: true`), then one `mood` event with the refreshed
+ *       reading (`{"type":"mood","mood":{mood, intensity} | null}`), after
+ *       which the stream closes. A failure mid-stream emits
+ *       `{"type":"error"}` and closes. Closing the connection aborts
+ *       generation; lines already streamed remain persisted. Errors before
+ *       the first frame (404, 409) are plain JSON responses.
+ *     parameters:
+ *       - $ref: '#/components/parameters/ThreadId'
+ *     responses:
+ *       200:
+ *         description: Stream of round events
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ *               description: SSE frames as described above
+ *       404:
+ *         description: Thread not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       409:
+ *         description: A round is already in progress for this thread
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.post(
+  '/thread/:id/round',
+  validateRequest(PostThreadRoundSchema),
+  controller.postThreadRound.bind(controller)
 );
 
 export default router;
