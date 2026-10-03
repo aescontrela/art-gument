@@ -5,6 +5,7 @@ import characterResponseTool from '../agent/tools/character-response-tool';
 import conversationMoodTool from '../agent/tools/conversation-mood';
 import { InternalServerError, ValidationError } from '../errors/api-error';
 import {
+  AgentRoundEvent,
   Character,
   CharacterResponse,
   ConversationContext,
@@ -103,7 +104,7 @@ export default class AgentService {
   async *streamModeratorRound(
     { messages, summary }: ConversationContext,
     signal?: AbortSignal
-  ): AsyncGenerator<CharacterResponse> {
+  ): AsyncGenerator<AgentRoundEvent> {
     const stream = this.anthropic.messages.stream(
       {
         model: this.model,
@@ -127,6 +128,7 @@ export default class AgentService {
       { signal }
     );
 
+    const announced = new Set<number>();
     const buffers = new Map<number, string>();
 
     for await (const event of stream) {
@@ -141,7 +143,16 @@ export default class AgentService {
           if (event.delta.type === 'input_json_delta') {
             const buffered = buffers.get(event.index);
             if (buffered === undefined) break;
-            buffers.set(event.index, buffered + event.delta.partial_json);
+            const payload = buffered + event.delta.partial_json;
+            buffers.set(event.index, payload);
+            if (!announced.has(event.index)) {
+              const match = /"character"\s*:\s*"([A-Z_]+)"/.exec(payload);
+              const characterParsed = z.enum(Character).safeParse(match?.[1]);
+              if (characterParsed.success) {
+                announced.add(event.index);
+                yield { type: 'typing', character: characterParsed.data };
+              }
+            }
           }
           break;
         }
@@ -151,6 +162,7 @@ export default class AgentService {
           if (raw === undefined) break;
 
           buffers.delete(event.index);
+          announced.delete(event.index);
 
           let block: unknown;
           try {
@@ -169,7 +181,7 @@ export default class AgentService {
               422
             );
           }
-          yield parsed.data;
+          yield { type: 'line', line: parsed.data };
           break;
         }
       }

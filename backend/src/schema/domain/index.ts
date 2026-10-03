@@ -42,3 +42,12 @@ export type ConversationMood = {
   mood: Mood;
   intensity: number;
 };
+
+export type RoundEvent =
+  | AgentRoundEvent
+  | { type: 'mood'; mood: { mood: Mood; intensity: number } | null }
+  | { type: 'error' };
+
+export type AgentRoundEvent =
+  | { type: 'typing'; character: Character }
+  | { type: 'line'; line: CharacterResponse };

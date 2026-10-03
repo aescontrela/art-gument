@@ -1,12 +1,8 @@
 import { APIError, NotFoundError } from '../errors/api-error';
 import MessageRepository from '../repositories/message-repository';
 import ThreadRepository from '../repositories/thread-repository';
-import { CharacterResponse, ChatMessage, Mood } from '../schema';
+import { ChatMessage, Mood, RoundEvent } from '../schema';
 import AgentService from './agent-service';
-
-export type RoundEvent =
-  | { type: 'line'; line: CharacterResponse }
-  | { type: 'mood'; mood: { mood: Mood; intensity: number } | null };
 
 const THREAD_WINDOW = 10;
 const SUMMARY_CHUNK_SIZE = 10;
@@ -126,32 +122,42 @@ export default class ChatService {
         THREAD_WINDOW
       );
 
-      const round = this.agentService.streamModeratorRound(
-        { messages: recentMessages, summary },
-        input.signal
-      );
+      try {
+        const round = this.agentService.streamModeratorRound(
+          { messages: recentMessages, summary },
+          input.signal
+        );
 
-      const newLines: ChatMessage[] = [];
+        const newLines: ChatMessage[] = [];
 
-      for await (const line of round) {
-        await this.messageRepository.create({
+        for await (const event of round) {
+          if (event.type === 'typing') {
+            yield event;
+            continue;
+          }
+
+          const { line } = event;
+
+          await this.messageRepository.create({
+            threadId: input.threadId,
+            author: line.character,
+            message: line.response,
+          });
+
+          newLines.push({ author: line.character, message: line.response });
+
+          yield event;
+        }
+        const mood = await this.refreshMood({
           threadId: input.threadId,
-          author: line.character,
-          message: line.response,
+          summary,
+          messages: [...recentMessages, ...newLines].slice(-THREAD_WINDOW),
         });
 
-        newLines.push({ author: line.character, message: line.response });
-
-        yield { type: 'line', line };
+        yield { type: 'mood', mood };
+      } catch {
+        yield { type: 'error' };
       }
-
-      const mood = await this.refreshMood({
-        threadId: input.threadId,
-        summary,
-        messages: [...recentMessages, ...newLines].slice(-THREAD_WINDOW),
-      });
-
-      yield { type: 'mood', mood };
     } finally {
       this.activeThreads.delete(input.threadId);
     }
